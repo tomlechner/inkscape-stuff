@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+  <_name>Column Calendar</_name>
+  <id>com.tomlechner.render.columncalendar</id>
+
+  <!-- dependency type="executable" location="inx">columncalendar.py</dependency -->
+
+  <param name="tab" type="notebook">
+    <page name="tab" _gui-text="Style">
+      <param name="color-grid"     type="string" _gui-text="Grid color">#777777</param>
+      <param name="grid-lines"     type="string" _gui-text="Grid thickness">.2pt</param>
+      <param name="color-year"     type="string" _gui-text="Year color">#000000</param>
+      <param name="color-month"    type="string" _gui-text="Month color">#000000</param>
+      <param name="color-day-name" type="string" _gui-text="Weekday name color ">#000000</param>
+      <param name="color-day"      type="string" _gui-text="Day color">#000000</param>
+      <param name="color-weekend"  type="string" _gui-text="Weekend day color">#787878</param>
+      <param name="color-nmd"      type="string" _gui-text="Next month day color">#B0B0B0</param>
+    </page>
+    <page name="tab" _gui-text="Localization">
+      <_param name="l10n-help" type="description">You may change the names for other languages:</_param>
+      <_param name="month-names"  type="string" _gui-text="Month names" xml:space="preserve">January February March April May June July August September October November December</_param>
+      <_param name="day-names"  type="string" _gui-text="Day names" xml:space="preserve">Sun Mon Tue Wed Thu Fri Sat</_param>
+      <_param name="day-names-help" type="description">(The day names list must start from Sunday)</_param>
+    </page>
+    <page name="tab" _gui-text="Configuration">
+      <param name="week-width" type="string" _gui-text="Width">2.5in</param>
+      <param name="month" type="int" min="0" max="12" _gui-text="Month">0</param>
+      <param name="year" type="int" min="0" max="3000" _gui-text="Year (0 for current)">0</param>
+      <!-- param name="fill-empty-day-boxes" type="boolean" _gui-text="Fill empty day boxes with next month's days">false</param -->
+    </page>
+  </param>
+  <effect>
+    <object-type>all</object-type>
+    <effects-menu>
+      <submenu _name="Toms"/>
+    </effects-menu>
+  </effect>
+  <script>
+    <command reldir="inx" interpreter="python">columncalendar.py</command>
+  </script>
+</inkscape-extension>
