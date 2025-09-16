@@ -29,6 +29,26 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 TODO
 - Multiple columns
 - Better layout options for writing out month names
+
+- moon phase:
+    from skyfield.api import load
+    from skyfield.framelib import ecliptic_frame
+
+    ts = load.timescale()
+    t = ts.utc(2019, 12, 9, 15, 36)
+
+    eph = load('de421.bsp')
+    sun, moon, earth = eph['sun'], eph['moon'], eph['earth']
+
+    e = earth.at(t)
+    _, slon, _ = e.observe(sun).apparent().frame_latlon(ecliptic_frame)
+    _, mlon, _ = e.observe(moon).apparent().frame_latlon(ecliptic_frame)
+    phase = (mlon.degrees - slon.degrees) % 360.0
+
+    print('{0:.1f}'.format(phase))
+
+
+
 '''
 
 __version__ = "0.3"
@@ -59,6 +79,11 @@ class ColumnCalendar (inkex.Effect):
           action="store", type=int,
           dest="year", default=datetime.today().year,
           help="Year to be generated. If 0, then the current year will be generated.")
+
+        self.arg_parser.add_argument("--include-moon",
+          action="store", type = inkex.Boolean,
+          dest="include_moon", default=False,
+          help="Include full moon indicator.")
 
         self.arg_parser.add_argument("--fill-empty-day-boxes",
           action="store", type=bool,
@@ -169,6 +194,11 @@ class ColumnCalendar (inkex.Effect):
         self.style_weekend['fill'] = self.options.color_weekend
         self.style_weekend['text-anchor'] = 'start'
 
+        self.style_weekend_month = self.style_day.copy()
+        self.style_weekend_month['font-size'] = str( .6 * self.textheight)
+        self.style_weekend_month['fill'] = self.options.color_weekend
+        self.style_weekend_month['text-anchor'] = 'start'
+
         self.style_nmd = self.style_day.copy()
         self.style_nmd['fill'] = self.options.color_nmd
 
@@ -193,11 +223,23 @@ class ColumnCalendar (inkex.Effect):
             }
 
 
+    # month is 1..12
     def RenderMonthGrid(self, month, year):
         textheight = self.textheight
 
+        
+        curweek = 0 # index in cal
+
         calendar.setfirstweekday(calendar.SUNDAY)
         cal = calendar.monthcalendar(year,month)
+        if cal[curweek][0] == 0:
+            month -= 1
+            if month < 1:
+                month = 12
+                year -= 1
+            cal = calendar.monthcalendar(year,month)
+            curweek = len(cal) - 1
+
         parent = self.year_g
 
         monthw = self.month_w
@@ -214,13 +256,12 @@ class ColumnCalendar (inkex.Effect):
         #
 
 
-
         txt_atts = { 'id': 'month' } #group for month day text
         self.month_g = etree.SubElement(parent, 'g', txt_atts)
 
 
          #horizontal lines
-        y=week_y
+        y = week_y
         for week in range(self.numweeks):
             if week==0:
                  #Add initial horizontal at top
@@ -239,7 +280,7 @@ class ColumnCalendar (inkex.Effect):
             y=y+dayh
 
          #vertical lines
-        x=week_x
+        x = week_x
         for c in range(8):
             path="M " + str(x)+","+str(week_y) + "L "+str(x)+","+str(week_y+self.doc_h-2*self.pad)
             line_atts = {'style': str(inkex.Style(self.line_style)),
@@ -260,94 +301,87 @@ class ColumnCalendar (inkex.Effect):
 
 
         #text
-        very_first = True
+        very_first = True # if we need to write the month with the day
         first_week = True
-        make_month = True
-        curweek = 0
-        month = month-1
-        while week_y+dayh < self.doc_h-self.pad:
-            if first_week and not very_first: first_week=False
+        #make_month = False # make true if cal needs to be recomputed
 
-            if make_month:
-                make_month=False
-                curweek=0
-                month=month+1
-                if month==13:
-                    month=1
-                    year = year+1
-                cal = calendar.monthcalendar(year,month)
+        while week_y < self.doc_h-self.pad:
 
-            if curweek==len(cal):
-                curweek=0
-                make_month=True
-                continue
-
-            week=cal[curweek]
+            week = cal[curweek]
 
             x = week_x + textheight/4
             y = week_y
             i = 0
-            while i<7:
-                day=week[i]
+            while i < 7:
+                day = week[i]
 
-                i=i+1
-                if (day==0 and first_week):
-                    x += dayw
-                    continue
+                if (day == 0): # need to advance month
+                    curweek = 0
+                    month += 1
+                    if month > 12:
+                        month = 1
+                        year += 1
+                    cal = calendar.monthcalendar(year,month)
+                    week = cal[curweek]
+                    day = week[i]
 
-                txt_atts = {
-                  'x': str( x ),
-                  'y': str( week_y+textheight ),
-                  'id': str(year)+"_"+str(month)+'_'+str(day),
-                  'text-anchor': "start"
-                  }
-                if (i==1 or i==7): txt_atts['style'] = str(inkex.Style(self.style_weekend))
-
+                i = i+1
 
 
-                if day==1 or very_first:
-                     #write month then day
+                moon = ""
+                if self.options.include_moon == True and day > 0:
+                    # this is not very accurate:
+                    this_date = date(year, month, day)
+                    known_fullmoon = date(2025, 8, 8)
+                    diff = this_date - known_fullmoon
+                    phase = (diff.days % 29.53059)
+                    if phase < 1.0: # / 29.53 / 2.0) or phase > 1-1.0/29.53:
+                        moon = "   O" # +str(self.options.include_moon)
+
+                if day == 1 or very_first: # write month then day
                     txt_atts = {
                       'x': str( x ),
-                      'y': str( week_y+textheight ),
+                      'y': str( week_y + textheight ),
                       'font-size': str( self.textheight*.6),
                       'id': str(year)+"_"+str(month)+'_'+str(day),
                       'text-anchor': "start"
                       }
+                    if (i==1 or i==7): txt_atts['style'] = str(inkex.Style(self.style_weekend_month))
                     etree.SubElement(self.month_g, 'text', txt_atts).text = self.options.month_names[month-1]
 
                     txt_atts = {
                       'x': str( x ),
-                      'y': str( week_y+2*textheight ),
+                      'y': str( week_y + 2*textheight ),
+                      'id': str(year)+"_"+str(month)+'_'+str(day),
+                      'font-size': str( self.textheight),
+                      'text-anchor': "start"
+                      }
+                    if (i==1 or i==7): txt_atts['style'] = str(inkex.Style(self.style_weekend))
+                    etree.SubElement(self.month_g, 'text', txt_atts).text = str(day) + moon
+                    very_first = False
+
+                else: # just write the day
+                    txt_atts = {
+                      'x': str( x ),
+                      'y': str( week_y + textheight ),
                       'id': str(year)+"_"+str(month)+'_'+str(day),
                       'text-anchor': "start"
                       }
-                    etree.SubElement(self.month_g, 'text', txt_atts).text = str(day)
-                    very_first = False
-
-                else:
-                    if day==0:
-                        if first_week: 
-                            x += dayw
-                            continue
-                        month=month+1
-                        curweek=0
-                        if month==13:
-                            month=1
-                            year = year+1
-                        cal = calendar.monthcalendar(year,month)
-                        week=cal[0]
-                        i -= 1
-                        continue
-
-                     #write day number only
-                    etree.SubElement(self.month_g, 'text', txt_atts).text = str(day)
+                    if (i==1 or i==7): txt_atts['style'] = str(inkex.Style(self.style_weekend))
+                    etree.SubElement(self.month_g, 'text', txt_atts).text = str(day) + moon
 
                 x += dayw
 
 
-            week_y += dayh;           
-            curweek=curweek+1
+            week_y += dayh;
+            curweek = curweek + 1
+            if curweek >= len(cal): # might happen when final month day is end of week
+                month += 1
+                if month > 12:
+                    year += 1
+                    month = 1
+                cal = calendar.monthcalendar(year, month)
+                curweek = 0
 
 
 
